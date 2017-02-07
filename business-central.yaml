@@ -1,0 +1,33 @@
+---
+- name: Installing Business Central in top of OpenShift
+  hosts: localhost
+  connection: local
+  vars:
+     username: demo
+     openshift_namespace: business-central
+     domain_route_postfix: cloudapps.forum.rhtechofficelatam.com
+  tasks:
+     - name: Delete any previously projects already created
+       command: oc delete project {{ openshift_namespace }} 
+       ignore_errors: True
+
+     - name: Create a new project name {{ openshift_namespace }} for a user {{ username }}
+       command: oadm new-project {{ openshift_namespace }} --display-name="Business Central" --admin={{ username }}
+
+     - name: Adjust the Policies so Business Central doesn't have problems running on top of OpenShift
+       command: oadm policy add-scc-to-user anyuid --namespace {{ openshift_namespace }} --serviceaccount=default
+
+     - name: Create a Binary build for Business Central. Be sure this ImageStream already exists
+       command: oc new-build "jbossdemocentral/developer" --name=business-central --binary-true --namespace {{ openshift_namespace }}
+  
+     - name: Import Image from Developer ?????
+       command: oc import-image developer
+
+     - name: Start building based on a current directory
+       command: oc start-build business-central --from-dir=. --follow=true --wait=true
+
+     - name: Create a new application based on this ImageStream{{ ':' }} business-central
+       command: oc new-app business-central
+
+     - name: Expose the route as business-central.{{ domain_route_postfix }} 
+       command: oc expose service business-central --hostname=business-central.{{ domain_route_postfix }}
