@@ -1,0 +1,11 @@
+---
+- name: Accessing Sequence
+  hosts: localhost
+  connection: local
+  vars:
+     jboss_installers: 
+                  - jboss-eap-6.4.0-installer.jar
+                  - jboss-eap-6.4.7-patch.zip
+                  - jboss-brms-6.3.0.GA-installer.jar
+  tasks:
+     - debug: msg={{ jboss_installers[0] }}
