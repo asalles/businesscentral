@@ -119,21 +119,21 @@
           - project_creation
 
      - name: Create a Binary build for Business Central. Be sure this ImageStream already exists
-       command: oc new-build business-central  --name=business-central --binary=true --namespace {{ businesscentral_namespace }}
+       command: oc new-build --image-stream="business-central/business-central" --allow-missing-imagestream-tags --name=business-central --binary=true --namespace {{ businesscentral_namespace }}
        tags:
           - project_creation
   
      - name: Start building based on a current directory
-       command: oc start-build business-central --from-dir=. --follow=true --wait=true
+       command: oc start-build business-central --from-dir=. --follow=true --wait=true --namespace {{ businesscentral_namespace }}
        tags:
           - project_creation
 
      - name: Create a new application based on this ImageStream{{ ':' }} business-central
-       command: oc new-app business-central
+       command: oc new-app business-central --namespace {{ businesscentral_namespace }}
        tags:
           - project_creation
 
      - name: Expose the route as business-central.{{ openshift_domain_cloudapps }} 
-       command: oc expose service business-central --hostname=business-central.{{ openshift_domain_cloudapps }}
+       command: oc expose service business-central --hostname=business-central.{{ openshift_domain_cloudapps }} --namespace {{ businesscentral_namespace }}
        tags:
           - project_creation
