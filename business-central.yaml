@@ -5,68 +5,64 @@
   connection: local
   vars:
      openshift_master: https://openshift.example.com:8443
+     openshift_domain: example.com
+     openshift_domain_cloudapps: cloudapps.{{ openshift_domain }} 
      username: demo
+     password: r3dh4t1!
      businesscentral_namespace: business-central
      businesscentral_docker_image: openshift/business-central:latest
-     openshift_domain_cloudapps: cloudapps.forum.rhtechofficelatam.com
      jboss_installers:
                   - templates/rhcs-bc/installs/jboss-eap-6.4.0-installer.jar
                   - templates/rhcs-bc/installs/jboss-eap-6.4.7-patch.zip
                   - templates/rhcs-bc/installs/jboss-brms-6.3.0.GA-installer.jar
   tasks:
+#### Checking if the Installers are correct positioned
      - name: Does JBoss EAP 6.4.0 file "{{ jboss_installers[0] }}" exists ?
        stat: path={{ jboss_installers[0] }}
        register: file_installer
        tags: 
           - check
-          - build
 
      - name: JBoss EAP 6.4.0 installer doesn't exist
        fail: msg="<{{ jboss_installers[0] }}> file wasn't found"
        when: file_installer.stat.exists == False
        tags: 
           - check
-          - build
 
      - name: Does JBoss EAP 6.4 Patch 7 file "{{ jboss_installers[1] }}" exists ?
        stat: path={{ jboss_installers[1] }}
        register: file_installer
        tags:
           - check
-          - build
 
      - name: JBoss EAP 6.4 Patch 7 doesn't exist 
        fail: msg="<{{ jboss_installers[1] }}> file wasn't found"
        when: file_installer.stat.exists == False
        tags:
           - check
-          - build
 
      - name: Does JBoss BRMS 6.3.0 GA file "{{ jboss_installers[2] }}" exists ?
        stat: path={{ jboss_installers[2] }}
        register: file_installer
        tags:
           - check
-          - build
 
      - name: JBoss EAP BRMS 6.3.0 GA doesn't exist             
        fail: msg="<{{ jboss_installers[2] }}> file wasn't found"
        when: file_installer.stat.exists == False
        tags:
           - check
-          - build
 
      - name: Modifying all the installers so they have Running permissions
        file: path={{ item }} mode="u+x"
        with_items: "{{ jboss_installers }}"
        tags: 
           - check
-          - build
 
+#### Getting Registry's Information and Docker build the image 
      - name: Make sure this is OpenShift's Administrator
        command: oc login --username=system:admin --insecure-skip-tls-verify --server={{ openshift_master }}
-          - check
-          - build
+          - registry
 
      - name: Get Docker Registry's IP
        command: oc get service/docker-registry --output jsonpath="{.spec.clusterIP}" --namespace default
@@ -90,37 +86,54 @@
        tags:
           - registry
 
+     - name: Prepare a Dockerfile which contains all the necessary information for Business Center
+       template: src=templates/Dockerfile.j2 dest=templates/rhcs-bc/Dockerfile
+       tags:
+          - registry
+
      - name: Build the current image{{ ':' }} "docker build --no-cache --rm=true --force-rm --tag {{ docker_tag }} templates/rhcs-bc/" 
        command: docker build --no-cache --rm=true --force-rm --tag {{ docker_tag }} templates/rhcs-bc/
        tags: 
           - registry
 
-
-
-
-    
-
+#### Creating the Project/Namespace 
      - name: Delete any previously projects already created
        command: oc delete project {{ businesscentral_namespace }} 
        ignore_errors: True
+       tags: 
+          - project_creation
 
      - name: Create a new project name {{ businesscentral_namespace }} for a user {{ username }}
        command: oadm new-project {{ businesscentral_namespace }} --display-name="Business Central" --admin={{ username }}
+       tags:
+          - project_creation
+
+     - name: Import the newly Docker Image created to a ImageStream in the current Project
+       command: oc import-image --confirm=true --insecure=true {{ docker_tag }} --namespace {{ businesscental_namespace }} 
+       tags:
+          - project_creation
 
      - name: Adjust the Policies so Business Central doesn't have problems running on top of OpenShift
        command: oadm policy add-scc-to-user anyuid --namespace {{ businesscentral_namespace }} --serviceaccount=default
+       tags:
+          - project_creation
 
      - name: Create a Binary build for Business Central. Be sure this ImageStream already exists
-       command: oc new-build "jbossdemocentral/developer" --name=business-central --binary-true --namespace {{ businesscentral_namespace }}
+       command: oc new-build business-central  --name=business-central --binary=true --namespace {{ businesscentral_namespace }}
+       tags:
+          - project_creation
   
-     - name: Import Image from Developer ?????
-       command: oc import-image developer
-
      - name: Start building based on a current directory
        command: oc start-build business-central --from-dir=. --follow=true --wait=true
+       tags:
+          - project_creation
 
      - name: Create a new application based on this ImageStream{{ ':' }} business-central
        command: oc new-app business-central
+       tags:
+          - project_creation
 
      - name: Expose the route as business-central.{{ openshift_domain_cloudapps }} 
        command: oc expose service business-central --hostname=business-central.{{ openshift_domain_cloudapps }}
+       tags:
+          - project_creation

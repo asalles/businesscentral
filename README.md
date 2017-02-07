@@ -1,10 +1,10 @@
 This is playbook to create the Business Central, which it's a integral part of LATAM Red Hat Forum 2016. 
 It must run inside OpenShift as "system:admin" and Gogs must be running with the following content:
 
-[PENDING: ORIGINAL CONTENT TO BRMS]
+https://github.com/pstlatam/rhforum2016brms
 
 ...which it's going to be used as:
-http://demo:r3dh4t1!@gogs:3000/demo/brms.git
+http://demo:r3dh4t1!@gogs.cloudapps.example.com/demo/brms.git
 
 Before running, check the following variables and change accordingly: 
 
