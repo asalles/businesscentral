@@ -10,3 +10,5 @@ openshift_namespace: business-central
 
 This would be the domain added to each service
 domain_route_postfix: cloudapps.forum.rhtechofficelatam.com
+
+
