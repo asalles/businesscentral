@@ -12,49 +12,25 @@
      businesscentral_namespace: business-central
      businesscentral_docker_image: openshift/business-central:latest
      jboss_installers:
-                  - templates/rhcs-bc/installs/jboss-eap-6.4.0-installer.jar
-                  - templates/rhcs-bc/installs/jboss-eap-6.4.7-patch.zip
-                  - templates/rhcs-bc/installs/jboss-brms-6.3.0.GA-installer.jar
+         - { name: "JBoss EAP 6.0 Installer", filename: "jboss-eap-6.4.0-installer.jar", url: "https://access.redhat.com/jbossnetwork/restricted/softwareDownload.html?softwareId=37383" }
+         - { name: "JBoss EAP 6.4 Patch 7", filename: "jboss-eap-6.4.7-patch.zip", url: "https://access.redhat.com/jbossnetwork/restricted/softwareDownload.html?softwareId=43071" }
+         - { name: "JBoss BRMS 6.3.0 GA Installer", filename: "jboss-brms-6.3.0.GA-installer.jar", url: "https://access.redhat.com/jbossnetwork/restricted/softwareDownload.html?softwareId=43631" }
   tasks:
 #### Checking if the Installers are correct positioned
-     - name: Does JBoss EAP 6.4.0 file "{{ jboss_installers[0] }}" exists ?
-       stat: path={{ jboss_installers[0] }}
-       register: file_installer
-       tags: 
-          - check
-
-     - name: JBoss EAP 6.4.0 installer doesn't exist
-       fail: msg="<{{ jboss_installers[0] }}> file wasn't found"
-       when: file_installer.stat.exists == False
-       tags: 
-          - check
-
-     - name: Does JBoss EAP 6.4 Patch 7 file "{{ jboss_installers[1] }}" exists ?
-       stat: path={{ jboss_installers[1] }}
-       register: file_installer
-       tags:
-          - check
-
-     - name: JBoss EAP 6.4 Patch 7 doesn't exist 
-       fail: msg="<{{ jboss_installers[1] }}> file wasn't found"
-       when: file_installer.stat.exists == False
-       tags:
-          - check
-
-     - name: Does JBoss BRMS 6.3.0 GA file "{{ jboss_installers[2] }}" exists ?
-       stat: path={{ jboss_installers[2] }}
-       register: file_installer
-       tags:
-          - check
-
-     - name: JBoss EAP BRMS 6.3.0 GA doesn't exist             
-       fail: msg="<{{ jboss_installers[2] }}> file wasn't found"
-       when: file_installer.stat.exists == False
-       tags:
+     - name: JBoss Installers are needed for this playbook   
+       debug: msg="Be sure the {{ item.name }} file{{ ':' }} templates/rhcs-bc/installs/{{ item.filename}} exists ? Available at {{ item.url }}"
+       with_items: "{{ jboss_installers }}"
+     
+     - name: Checking if JBoss Installers are avaible at templates/rhcs-bc/installs
+       stat: path=templates/rhcs-bc/installs/{{ item.filename }}
+       with_items: "{{ jboss_installers }}"
+       register: jboss_installer_file
+       failed_when: jboss_installer_file.stat.exists == False
+       tags:  
           - check
 
      - name: Modifying all the installers so they have Running permissions
-       file: path={{ item }} mode="u+x"
+       file: path=templates/rhcs-bc/installs/{{ item.filename }} mode="u+x"
        with_items: "{{ jboss_installers }}"
        tags: 
           - check
@@ -104,12 +80,11 @@
           - project_creation
 
      - name: Create a new project name {{ businesscentral_namespace }} for a user {{ username }}
-       command: oadm new-project {{ businesscentral_namespace }} --display-name="Business Central" --admin={{ username }}
-       tags:
-          - project_creation
-
-     - name: Import the newly Docker Image created to a ImageStream in the current Project
-       command: oc import-image --confirm=true --insecure=true {{ docker_tag }} --namespace {{ businesscental_namespace }} 
+       command: oadm new-project {{ businesscentral_namespace }} --display-name="Business Central{{ ':' }} LATAM Red Hat Forum 2016" --admin={{ username }}
+       register: project_creation
+       until: project_creation.rc == 0
+       retries: 5
+       delay: 15
        tags:
           - project_creation
 
@@ -118,13 +93,22 @@
        tags:
           - project_creation
 
-     - name: Create a Binary build for Business Central. Be sure this ImageStream already exists
-       command: oc new-build --image-stream="business-central/business-central" --allow-missing-imagestream-tags --name=business-central --binary=true --namespace {{ businesscentral_namespace }}
+     - name: Create a ImageStream based on JBoss Demo Central{{ ':' }} jbossdemocentral/developer
+       command: oc new-build "jbossdemocentral/developer" --name=business-central --binary=true --namespace {{ businesscentral_namespace }}
+       tags: 
+          - project_creation
+
+     - name: Import the newly Docker Image created to a ImageStream in the current Project
+       command: oc import-image --confirm=true --insecure=true developer --namespace {{ businesscentral_namespace }}
+       register: image_import
+       until: image_import.rc == 0
+       retries: 5
+       delay: 15
        tags:
           - project_creation
-  
+
      - name: Start building based on a current directory
-       command: oc start-build business-central --from-dir=. --follow=true --wait=true --namespace {{ businesscentral_namespace }}
+       command: oc start-build business-central --from-dir=templates/rhcs-bc/ --follow=true --wait=true --namespace {{ businesscentral_namespace }}
        tags:
           - project_creation
 
