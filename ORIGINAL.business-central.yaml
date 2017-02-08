@@ -35,10 +35,42 @@
        tags: 
           - check
 
+#### Getting Registry's Information and Docker build the image 
+     - name: Make sure this is OpenShift's Administrator
+       command: oc login --username=system:admin --insecure-skip-tls-verify --server={{ openshift_master }}
+          - registry
+
+     - name: Get Docker Registry's IP
+       command: oc get service/docker-registry --output jsonpath="{.spec.clusterIP}" --namespace default
+       register: docker_registry_ip
+       tags: 
+          - registry
+
+     - name: Get Docker Registry's Port
+       command: oc get service/docker-registry --output jsonpath="{.spec.ports.*.port}" --namespace default
+       register: docker_registry_port
+       tags: 
+          - registry
+
+     - name: Set Docker Registry's Address
+       set_fact: docker_registry={{ docker_registry_ip.stdout }}:{{ docker_registry_port.stdout }}
+       tags: 
+          - registry
+
+     - name: Setting Docker's TAG{{ ':' }} {{ docker_registry }}/{{ businesscentral_docker_image }}
+       set_fact: docker_tag={{ docker_registry }}/{{ businesscentral_docker_image }}
+       tags:
+          - registry
+
      - name: Prepare a Dockerfile which contains all the necessary information for Business Center
        template: src=templates/Dockerfile.j2 dest=templates/rhcs-bc/Dockerfile
        tags:
-          - dockerfile
+          - registry
+
+     - name: Build the current image{{ ':' }} "docker build --no-cache --rm=true --force-rm --tag {{ docker_tag }} templates/rhcs-bc/" 
+       command: docker build --no-cache --rm=true --force-rm --tag {{ docker_tag }} templates/rhcs-bc/
+       tags: 
+          - registry
 
 #### Creating the Project/Namespace 
      - name: Delete any previously projects already created
