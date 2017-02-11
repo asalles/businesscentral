@@ -4,7 +4,6 @@
   hosts: localhost
   connection: local
   vars:
-     openshift_master: https://openshift.example.com:8443
      openshift_domain: example.com
      openshift_domain_cloudapps: cloudapps.{{ openshift_domain }} 
      username: demo
@@ -15,6 +14,7 @@
          - { name: "JBoss EAP 6.0 Installer", filename: "jboss-eap-6.4.0-installer.jar", url: "https://access.redhat.com/jbossnetwork/restricted/softwareDownload.html?softwareId=37383" }
          - { name: "JBoss EAP 6.4 Patch 7", filename: "jboss-eap-6.4.7-patch.zip", url: "https://access.redhat.com/jbossnetwork/restricted/softwareDownload.html?softwareId=43071" }
          - { name: "JBoss BRMS 6.3.0 GA Installer", filename: "jboss-brms-6.3.0.GA-installer.jar", url: "https://access.redhat.com/jbossnetwork/restricted/softwareDownload.html?softwareId=43631" }
+     gogs_namespace: tooling
   tasks:
 #### Checking if the Installers are correct positioned
      - name: JBoss Installers are needed for this playbook   
@@ -34,6 +34,38 @@
        with_items: "{{ jboss_installers }}"
        tags: 
           - check
+
+     - name: Fetch Gogs's IP Address
+       command: oc get service/gogs --output jsonpath='{..spec.clusterIP}' --namespace {{ gogs_namespace }}
+       register: gogs_ip
+       failed_when: gogs_ip.rc != 0
+       tags:
+          - create
+          - gogs
+
+     - name: Fetch Gogs's Port Address
+       command: oc get service/gogs --output jsonpath='{..spec.ports[?(@.name=="web")].port}' --namespace {{ gogs_namespace }}
+       register: gogs_port
+       failed_when: gogs_port.rc != 0
+       tags:
+          - create
+          - gogs
+
+     - name: Define what gogs's IP and port show able to test it
+       set_fact: gogs_address="http{{ ':' }}//{{ gogs_ip.stdout }}{{ ':' }}{{ gogs_port.stdout }}"
+       tags:
+          - create
+          - gogs
+
+     - name: Wait for Gogs to be ready{{ ":" }} {{ gogs_address }}
+       uri: url="{{ gogs_address }}" status_code=200 
+       register: gogs_wait
+       until: gogs_wait.status == 200
+       retries: 60
+       delay: 10
+       tags: 
+         - create
+         - gogs
 
      - name: Prepare a Dockerfile which contains all the necessary information for Business Center
        template: src=templates/Dockerfile.j2 dest=templates/rhcs-bc/Dockerfile
