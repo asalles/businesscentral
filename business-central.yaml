@@ -121,3 +121,39 @@
        command: oc expose service business-central --hostname=business-central.{{ openshift_domain_cloudapps }} --namespace {{ businesscentral_namespace }}
        tags:
           - project_creation
+
+     - name: Fetch Business Central IP Address and Port Number
+       command: oc get service/business-central --output jsonpath='http://{..spec.clusterIP}:{..spec.ports[?(@.name=="8080-tcp")].port}' --namespace {{ businesscentral_namespace }} 
+       register: business_central_address
+       tags: config
+
+     - name: Waiting Business Central to be Up{{ ':' }}{{ business_central_address.stdout }}
+       uri: url="{{ business_central_address.stdout }}" status_code=200
+       register: business_central_wait
+       until: business_central_wait.status == 200
+       retries: 60
+       delay: 10
+       tags: config
+      
+     - name: Setting Up Organization Unit at Business Central Name{{ ':' }} TechOffice. HardCoded username{{ ':' }} demo, password{{ ':' }}jbossbrms1!
+       uri: method=POST body_format=json url={{ business_central_address.stdout }}/business-central/rest/organizationalunits/
+            user='demo' password='jbossbrms1!' force_basic_auth=yes return_content=yes 
+            body="{\"name\"{{ ':' }}\"techoffice\",\"owner\"{{ ':' }}\"demo\",\"description\"{{ ':' }}null,\"repositories\"{{ ':' }}[]}"
+       register: business_central_response
+       failed_when: business_central_response.status != 202
+       tags: config
+
+     - debug: var=business_central_response
+       tags: config
+
+     - name: Setting Up Repositories at Business Central Name{{ ':' }} TechOffice. HardCoded username{{ ':' }} demo, password{{ ':' }}jbossbrms1!
+       uri: method=POST body_format=json url={{ business_central_address.stdout }}/business-central/rest/repositories/
+            user='demo' password='jbossbrms1!' force_basic_auth=yes return_content=yes                  
+            body="{\"name\"{{ ':' }}\"brms\",\"description\"{{ ':' }}null,\"requestType\"{{ ':' }}\"new\",\"gitURL\"{{ ':' }}null,\"organizationalUnitName\"{{ ':' }}\"techoffice\"}"
+       register: business_central_response
+       failed_when: business_central_response.status != 202
+       tags: config
+
+     - debug: var=business_central_response
+       tags: config
+

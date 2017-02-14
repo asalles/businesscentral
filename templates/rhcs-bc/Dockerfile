@@ -31,9 +31,9 @@ RUN sed -i "s:<installpath>.*</installpath>:<installpath>$BRMS_HOME</installpath
     && $BRMS_HOME/bin/jboss-cli.sh --command="patch apply /opt/jboss/jboss-eap-$EAP_VERSION_MAJOR.$EAP_VERSION_MINOR.$EAP_VERSION_PATCH-patch.zip --override-all" \
     && java -jar /opt/jboss/jboss-brms-$BRMS_VERSION_MAJOR.$BRMS_VERSION_MINOR.$BRMS_VERSION_MICRO.$BRMS_VERSION_PATCH-installer.jar  /opt/jboss/installation-brms -variablefile /opt/jboss/installation-brms.variables \
     && rm -rf /opt/jboss/jboss-brms-$BRMS_VERSION_MAJOR.$BRMS_VERSION_MINOR.$BRMS_VERSION_MICRO.$BRMS_VERSION_PATCH-installer.jar /opt/jboss/jboss-eap-$EAP_VERSION_MAJOR.$EAP_VERSION_MINOR.$EAP_VERSION_MICRO-installer.jar /opt/jboss/jboss-eap-$EAP_VERSION_MAJOR.$EAP_VERSION_MINOR.$EAP_VERSION_PATCH-patch.zip /opt/jboss/installation-brms /opt/jboss/installation-brms.variables /opt/jboss/installation-eap /opt/jboss/installation-eap.variables $BRMS_HOME/standalone/configuration/standalone_xml_history/ \
-   && git clone http://172.30.29.249:3000/demo/brms.git --bare /opt/jboss/brms/jboss-eap-6.4/bin/.niogit/brms.git \
+   && git clone http://172.30.229.17:3000/demo/brms.git --bare /opt/jboss/brms/jboss-eap-6.4/bin/.niogit/brms.git \
    && cd /opt/jboss/brms/jboss-eap-6.4/bin/.niogit/brms.git \
-   && git remote set-url origin http://demo:r3dh4t1!@http://172.30.29.249:3000/demo/brms.git \
+   && git remote set-url origin http://demo:r3dh4t1!@http://172.30.229.17:3000/demo/brms.git \
    && echo $'#!/bin/sh\ngit push origin master' > /opt/jboss/brms/jboss-eap-6.4/bin/.niogit/brms.git/hooks/post-commit \
    && chmod u+x /opt/jboss/brms/jboss-eap-6.4/bin/.niogit/brms.git/hooks/post-commit
 
