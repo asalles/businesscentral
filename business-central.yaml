@@ -134,6 +134,18 @@
        retries: 60
        delay: 10
        tags: config
+
+     - name: Waiting Business Central Application to be Up{{ ':' }}{{ business_central_address.stdout }}/business-central
+       uri: url="{{ business_central_address.stdout }}/business-central" status_code=200
+       register: business_central_wait
+       until: business_central_wait.status == 200
+       retries: 60
+       delay: 10
+       tags: config
+
+     - name: Wait Business Central to settle down a while
+       pause: seconds=60
+       tags: config
       
      - name: Setting Up Organization Unit at Business Central Name{{ ':' }} TechOffice. HardCoded username{{ ':' }} demo, password{{ ':' }}jbossbrms1!
        uri: method=POST body_format=json url={{ business_central_address.stdout }}/business-central/rest/organizationalunits/
