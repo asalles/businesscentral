@@ -143,9 +143,6 @@
        failed_when: business_central_response.status != 202
        tags: config
 
-     - debug: var=business_central_response
-       tags: config
-
      - name: Setting Up Repositories at Business Central Name{{ ':' }} TechOffice. HardCoded username{{ ':' }} demo, password{{ ':' }}jbossbrms1!
        uri: method=POST body_format=json url={{ business_central_address.stdout }}/business-central/rest/repositories/
             user='demo' password='jbossbrms1!' force_basic_auth=yes return_content=yes                  
@@ -153,7 +150,3 @@
        register: business_central_response
        failed_when: business_central_response.status != 202
        tags: config
-
-     - debug: var=business_central_response
-       tags: config
-
