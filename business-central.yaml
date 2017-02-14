@@ -14,12 +14,14 @@
          - { name: "JBoss EAP 6.0 Installer", filename: "jboss-eap-6.4.0-installer.jar", url: "https://access.redhat.com/jbossnetwork/restricted/softwareDownload.html?softwareId=37383" }
          - { name: "JBoss EAP 6.4 Patch 7", filename: "jboss-eap-6.4.7-patch.zip", url: "https://access.redhat.com/jbossnetwork/restricted/softwareDownload.html?softwareId=43071" }
          - { name: "JBoss BRMS 6.3.0 GA Installer", filename: "jboss-brms-6.3.0.GA-installer.jar", url: "https://access.redhat.com/jbossnetwork/restricted/softwareDownload.html?softwareId=43631" }
-     gogs_namespace: tooling
+     tooling_namespace: tooling
   tasks:
 #### Checking if the Installers are correct positioned
      - name: JBoss Installers are needed for this playbook   
-       debug: msg="Be sure the {{ item.name }} file{{ ':' }} templates/rhcs-bc/installs/{{ item.filename}} exists ? Available at {{ item.url }}"
+       debug: msg="Be sure the {{ item.name }} file{{ ':' }} templates/rhcs-bc/installs/{{ item.filename }} exists ? Available at {{ item.url }}"
        with_items: "{{ jboss_installers }}"
+       tags:  
+          - check
      
      - name: Checking if JBoss Installers are avaible at templates/rhcs-bc/installs
        stat: path=templates/rhcs-bc/installs/{{ item.filename }}
@@ -35,30 +37,22 @@
        tags: 
           - check
 
-     - name: Fetch Gogs's IP Address
-       command: oc get service/gogs --output jsonpath='{..spec.clusterIP}' --namespace {{ gogs_namespace }}
-       register: gogs_ip
-       failed_when: gogs_ip.rc != 0
-       tags:
-          - create
-          - gogs
-
      - name: Fetch Gogs's Port Address
-       command: oc get service/gogs --output jsonpath='{..spec.ports[?(@.name=="web")].port}' --namespace {{ gogs_namespace }}
+       command: oc get service/gogs --output jsonpath='{..spec.ports[?(@.name=="web")].port}' --namespace {{ tooling_namespace }}
        register: gogs_port
        failed_when: gogs_port.rc != 0
        tags:
           - create
           - gogs
 
-     - name: Define what gogs's IP and port show able to test it
-       set_fact: gogs_address="http{{ ':' }}//{{ gogs_ip.stdout }}{{ ':' }}{{ gogs_port.stdout }}"
+     - name: Define Gogs's
+       set_fact: gogs_url="gogs.{{ tooling_namespace }}.svc.cluster.local{{ ':' }}{{ gogs_port.stdout }}"
        tags:
           - create
           - gogs
 
-     - name: Wait for Gogs to be ready{{ ":" }} {{ gogs_address }}
-       uri: url="{{ gogs_address }}" status_code=200 
+     - name: Wait for Gogs to be ready{{ ":" }} {{ gogs_url }}
+       uri: url="http://{{ gogs_url }}" status_code=200 
        register: gogs_wait
        until: gogs_wait.status == 200
        retries: 60
@@ -66,11 +60,6 @@
        tags: 
          - create
          - gogs
-
-     - name: Prepare a Dockerfile which contains all the necessary information for Business Center
-       template: src=templates/Dockerfile.j2 dest=templates/rhcs-bc/Dockerfile
-       tags:
-          - dockerfile
 
 #### Creating the Project/Namespace 
      - name: Delete any previously projects already created
@@ -98,6 +87,11 @@
        tags: 
           - project_creation
 
+     - name: Added some variables used for Docker Build 
+       command: oc env buildconfig/business-central GOGS_URL="{{ gogs_url }}" GOGS_USERNAME="{{ username }}" GOGS_PASSWORD="{{ password }}" --namespace {{ businesscentral_namespace }}
+       tags:
+          - project_creation
+
      - name: Import the newly Docker Image created to a ImageStream in the current Project
        command: oc import-image --confirm=true --insecure=true developer --namespace {{ businesscentral_namespace }}
        register: image_import
@@ -122,21 +116,25 @@
        tags:
           - project_creation
 
-     - name: Fetch Business Central IP Address and Port Number
-       command: oc get service/business-central --output jsonpath='http://{..spec.clusterIP}:{..spec.ports[?(@.name=="8080-tcp")].port}' --namespace {{ businesscentral_namespace }} 
-       register: business_central_address
+     - name: Fetch Business Central Port Number
+       command: oc get service/business-central --output jsonpath='{..spec.ports[?(@.name=="8080-tcp")].port}' --namespace {{ businesscentral_namespace }}
+       register: business_central_port
        tags: config
 
-     - name: Waiting Business Central to be Up{{ ':' }}{{ business_central_address.stdout }}
-       uri: url="{{ business_central_address.stdout }}" status_code=200
+     - name: Define Business Central's URL
+       set_fact: business_central_address="http{{ ':' }}//business-central.{{ businesscentral_namespace }}.svc.cluster.local{{ ':' }}{{ business_central_port.stdout }}"
+       tags: config
+
+     - name: Waiting Business Central to be Up{{ ':' }} {{ business_central_address }}
+       uri: url="{{ business_central_address }}" status_code=200
        register: business_central_wait
        until: business_central_wait.status == 200
        retries: 60
        delay: 10
        tags: config
 
-     - name: Waiting Business Central Application to be Up{{ ':' }}{{ business_central_address.stdout }}/business-central
-       uri: url="{{ business_central_address.stdout }}/business-central" status_code=200
+     - name: Waiting Business Central Application to be Up{{ ':' }} {{ business_central_address }}/business-central
+       uri: url="{{ business_central_address }}/business-central" status_code=200
        register: business_central_wait
        until: business_central_wait.status == 200
        retries: 60
@@ -148,7 +146,7 @@
        tags: config
       
      - name: Setting Up Organization Unit at Business Central Name{{ ':' }} TechOffice. HardCoded username{{ ':' }} demo, password{{ ':' }}jbossbrms1!
-       uri: method=POST body_format=json url={{ business_central_address.stdout }}/business-central/rest/organizationalunits/
+       uri: method=POST body_format=json url={{ business_central_address }}/business-central/rest/organizationalunits/
             user='demo' password='jbossbrms1!' force_basic_auth=yes return_content=yes 
             body="{\"name\"{{ ':' }}\"techoffice\",\"owner\"{{ ':' }}\"demo\",\"description\"{{ ':' }}null,\"repositories\"{{ ':' }}[]}"
        register: business_central_response
@@ -156,7 +154,7 @@
        tags: config
 
      - name: Setting Up Repositories at Business Central Name{{ ':' }} TechOffice. HardCoded username{{ ':' }} demo, password{{ ':' }}jbossbrms1!
-       uri: method=POST body_format=json url={{ business_central_address.stdout }}/business-central/rest/repositories/
+       uri: method=POST body_format=json url={{ business_central_address }}/business-central/rest/repositories/
             user='demo' password='jbossbrms1!' force_basic_auth=yes return_content=yes                  
             body="{\"name\"{{ ':' }}\"brms\",\"description\"{{ ':' }}null,\"requestType\"{{ ':' }}\"new\",\"gitURL\"{{ ':' }}null,\"organizationalUnitName\"{{ ':' }}\"techoffice\"}"
        register: business_central_response
